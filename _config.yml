@@ -1,0 +1,42 @@
+# =========================================================
+# CONFIGURAÇÃO PRINCIPAL DO JEKYLL
+# Define metadados do site e opções de compilação
+# =========================================================
+
+# --- Configurações do Site ---
+title: AmpBass
+email: david.casimiro.0812@gmail.com
+description: Um site estático simples e responsivo, construído com Jekyll e hospedado no GitHub Pages.
+author: David Casimir
+
+# --- Configurações de URL ---
+# url: O domínio completo do seu site (sem barra no final)
+url: https://david-casimiro.github.io/AmpBass
+# baseurl: O caminho base do seu site se ele estiver em um subdiretório (Ex: /nome-do-repositorio)
+# Se o seu site for um Project Page, use o nome do seu repositório aqui.
+# Se for um User/Organization Page (usuario.github.io), deixe-o como vazio ("").
+baseurl: AmpBass
+# --- Configurações de Compilação ---
+markdown: kramdown
+theme: minima # O tema padrão, totalmente compatível com o GitHub Pages
+permalink: /:title/ # Formato das URLs (Ex: /sobre-mim/)
+
+# Plugins usados e compatíveis com GitHub Pages
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Arquivos e pastas a serem ignorados pelo Jekyll
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - Rakefile
+  - vendor/
+  - node_modules/
+
+# Configurações de Coleções (Opcional - Adicione aqui para gerenciar tipos de conteúdo)
+# collections:
+#   projetos:
+#     output: true
+#     permalink: /projetos/:title/
