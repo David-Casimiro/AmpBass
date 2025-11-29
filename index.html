@@ -18,12 +18,14 @@ html,body{
 }
 canvas{background:#000;border-radius:10px}
 .section{
-  background:#020617;
   border:1px solid #1e293b;
   border-radius:18px;
   padding:1rem;
 }
-label{font-size:0.7rem;color:#9ca3af}
+label{
+  font-size:0.7rem;
+  color:#9ca3af;
+}
 input[type=range]{touch-action:none}
 button:active{transform:scale(.96)}
 </style>
@@ -34,7 +36,7 @@ button:active{transform:scale(.96)}
 <!-- HEADER -->
 <header class="text-center mb-3">
   <h1 class="text-xl font-bold">🎸 BassFX</h1>
-  <p class="text-[10px] text-gray-400">Optimizado para Celular</p>
+  <p class="text-[10px] text-gray-400">Gain & Master – Mobile</p>
 </header>
 
 <!-- VISUAL -->
@@ -42,7 +44,7 @@ button:active{transform:scale(.96)}
   <canvas id="scope" class="w-full h-28"></canvas>
 </section>
 
-<!-- CONTROLES PRINCIPAIS -->
+<!-- BOTÕES -->
 <section class="grid grid-cols-2 gap-3 mb-3">
   <button id="powerBtn"
     class="py-4 rounded-xl bg-green-700 font-bold text-white">
@@ -55,33 +57,27 @@ button:active{transform:scale(.96)}
   </button>
 </section>
 
-<!-- INPUT -->
+<!-- INPUT GAIN -->
 <section class="section mb-3">
   <label>INPUT GAIN</label>
   <input id="gain" type="range" min="0" max="10" step="0.1" value="3">
 </section>
 
-<!-- COMPRESSOR -->
-<section class="section mb-3">
-  <label>COMPRESSOR (Threshold)</label>
-  <input id="comp" type="range" min="0" max="30" value="12">
-</section>
-
-<!-- MASTER -->
+<!-- MASTER VOLUME -->
 <section class="section">
   <label>MASTER VOLUME</label>
   <input id="volume" type="range" min="0" max="1.5" step="0.05" value="0.8">
 </section>
 
 <footer class="text-center mt-4 text-[9px] text-gray-500">
-  BassFX • Web Audio • PWA Ready
+  BassFX • Simples • Estável • PWA
 </footer>
 
 <script>
-/* ================= AUDIO ENGINE MOBILE ================= */
+/* ================= AUDIO ENGINE ================= */
 
-let ctx,mic,gainNode,compressor,master,analyser,stream;
-let running=false,micOn=true;
+let ctx, mic, gainNode, master, analyser, stream;
+let running=false, micOn=true;
 
 const powerBtn=document.getElementById("powerBtn");
 const micBtn=document.getElementById("micBtn");
@@ -89,11 +85,10 @@ const scope=document.getElementById("scope");
 const c=scope.getContext("2d");
 
 const gain=document.getElementById("gain");
-const comp=document.getElementById("comp");
 const volume=document.getElementById("volume");
 
 /* ----- START / STOP ----- */
-powerBtn.onclick=async()=>{
+powerBtn.onclick=async ()=>{
  if(!running){
   ctx=new AudioContext({
     latencyHint:"interactive",
@@ -114,12 +109,6 @@ powerBtn.onclick=async()=>{
   gainNode=ctx.createGain();
   gainNode.gain.value=gain.value;
 
-  compressor=ctx.createDynamicsCompressor();
-  compressor.threshold.value=-comp.value;
-  compressor.ratio.value=4;
-  compressor.attack.value=0.003;
-  compressor.release.value=0.25;
-
   master=ctx.createGain();
   master.gain.value=volume.value;
 
@@ -127,7 +116,6 @@ powerBtn.onclick=async()=>{
   analyser.fftSize=1024;
 
   mic.connect(gainNode)
-     .connect(compressor)
      .connect(master)
      .connect(analyser)
      .connect(ctx.destination);
@@ -149,15 +137,14 @@ powerBtn.onclick=async()=>{
 /* ----- MIC ON / OFF ----- */
 micBtn.onclick=()=>{
  micOn=!micOn;
- gainNode && (gainNode.gain.value=micOn?gain.value:0);
- micBtn.textContent=micOn?"MIC ON":"MIC OFF";
- micBtn.classList.toggle("bg-gray-600",!micOn);
+ gainNode && (gainNode.gain.value = micOn ? gain.value : 0);
+ micBtn.textContent = micOn ? "MIC ON" : "MIC OFF";
+ micBtn.classList.toggle("bg-gray-600", !micOn);
 };
 
 /* ----- CONTROLES ----- */
-gain.oninput=e=>gainNode&&(gainNode.gain.value=e.target.value);
-comp.oninput=e=>compressor&&(compressor.threshold.value=-e.target.value);
-volume.oninput=e=>master&&(master.gain.value=e.target.value);
+gain.oninput = e => gainNode && (gainNode.gain.value = e.target.value);
+volume.oninput = e => master && (master.gain.value = e.target.value);
 
 /* ----- VISUAL ----- */
 function draw(){
@@ -172,7 +159,6 @@ function draw(){
 
  c.fillStyle="#000";
  c.fillRect(0,0,scope.width,scope.height);
-
  c.strokeStyle="#ef4444";
  c.beginPath();
 
@@ -188,8 +174,10 @@ function draw(){
 if('serviceWorker' in navigator){
  navigator.serviceWorker.register(
   URL.createObjectURL(
-   new Blob([`self.addEventListener("fetch",e=>e.respondWith(fetch(e.request)))`],
-   {type:"application/javascript"})
+   new Blob(
+    [`self.addEventListener("fetch",e=>e.respondWith(fetch(e.request)))`],
+    {type:"application/javascript"}
+   )
   )
  );
 }
