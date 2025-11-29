@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+
+<title>BassFX PWA</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111111">
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<style>
+body { background:#111; color:#eee; font-family:sans-serif }
+canvas { background:#000; width:100%; height:150px }
+input[type=range]{ width:100% }
+button{ padding:10px; font-weight:bold }
+</style>
+</head>
+
+<body>
+
+<h1 style="text-align:center">🎸 BassFX PWA</h1>
+
+<canvas id="scope"></canvas>
+
+<button id="powerBtn">LIGAR ÁUDIO</button>
+<button id="micBtn">MIC ON</button>
+
+<label>Gain</label>
+<input type="range" id="gain" min="0" max="10" step="0.1" value="3">
+
+<label>Compressor</label>
+<input type="range" id="comp" min="0" max="20" value="10">
+
+<label>Master</label>
+<input type="range" id="volume" min="0" max="1.5" step="0.05" value="0.8">
+
+<script>
+let ctx, mic, gainNode, compressor, analyser, master, stream;
+let running=false, micOn=true;
+
+const powerBtn=document.getElementById("powerBtn");
+const micBtn=document.getElementById("micBtn");
+const scope=document.getElementById("scope");
+const c=scope.getContext("2d");
+
+powerBtn.onclick=async()=>{
+ if(!running){
+  ctx=new AudioContext();
+  stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  mic=ctx.createMediaStreamSource(stream);
+
+  gainNode=ctx.createGain();
+  compressor=ctx.createDynamicsCompressor();
+  master=ctx.createGain();
+  analyser=ctx.createAnalyser();
+
+  gainNode.gain.value=3;
+  master.gain.value=0.8;
+
+  mic.connect(gainNode);
+  gainNode.connect(compressor);
+  compressor.connect(master);
+  master.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  running=true;
+  powerBtn.innerText="DESLIGAR";
+  draw();
+ } else {
+  ctx.close();
+  stream.getTracks().forEach(t=>t.stop());
+  running=false;
+  powerBtn.innerText="LIGAR ÁUDIO";
+ }
+};
+
+micBtn.onclick=()=>{
+ micOn=!micOn;
+ gainNode.gain.value= micOn ? document.getElementById("gain").value : 0;
+ micBtn.innerText= micOn ? "MIC ON" : "MIC OFF";
+};
+
+gain.oninput=e=> gainNode && (gainNode.gain.value=e.target.value);
+volume.oninput=e=> master && (master.gain.value=e.target.value);
+comp.oninput=e=> compressor && (compressor.threshold.value= -e.target.value);
+
+function draw(){
+ requestAnimationFrame(draw);
+ const data=new Uint8Array(analyser.fftSize);
+ analyser.getByteTimeDomainData(data);
+ c.fillStyle="#000"; c.fillRect(0,0,scope.width,scope.height);
+ c.strokeStyle="red"; c.beginPath();
+ data.forEach((v,i)=>{
+  const x=i*scope.width/data.length;
+  const y=(v/255)*scope.height;
+  i?c.lineTo(x,y):c.moveTo(x,y);
+ });
+ c.stroke();
+}
+</script>
+
+<script>
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+</body>
+</html>
