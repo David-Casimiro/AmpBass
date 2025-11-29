@@ -2,93 +2,198 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>BassFX PWA</title>
+<title>BassFX Mobile</title>
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0f172a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#020617">
 
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-body {
-  background: radial-gradient(circle at top, #020617, #000);
-  color: #e5e7eb;
-  font-family: system-ui, sans-serif;
+html,body{
+  background:#020617;
+  color:#e5e7eb;
+  font-family:system-ui,-apple-system,sans-serif;
+  touch-action:manipulation;
 }
-.section {
-  background: linear-gradient(180deg, #020617, #020617);
-  border: 1px solid #1e293b;
-  border-radius: 14px;
-  padding: 1rem;
+canvas{background:#000;border-radius:10px}
+.section{
+  background:#020617;
+  border:1px solid #1e293b;
+  border-radius:18px;
+  padding:1rem;
 }
-.slider-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
-canvas {
-  background:#000;
-  border-radius: 8px;
-}
-button {
-  transition: all .15s ease;
-}
+label{font-size:0.7rem;color:#9ca3af}
+input[type=range]{touch-action:none}
+button:active{transform:scale(.96)}
 </style>
 </head>
 
-<body class="p-4 max-w-xl mx-auto">
+<body class="p-3 max-w-md mx-auto">
 
 <!-- HEADER -->
-<header class="text-center mb-4">
-  <h1 class="text-2xl font-bold tracking-wider">🎸 BASS<span class="text-red-500">FX</span></h1>
-  <p class="text-xs text-gray-400 tracking-widest">AMPLIFICADOR DIGITAL</p>
+<header class="text-center mb-3">
+  <h1 class="text-xl font-bold">🎸 BassFX</h1>
+  <p class="text-[10px] text-gray-400">Optimizado para Celular</p>
 </header>
 
-<!-- VISUALIZADOR -->
-<section class="section mb-4">
-  <canvas id="scope" class="w-full h-32"></canvas>
-  <p class="text-[10px] text-gray-500 mt-1 text-right">Monitor de Sinal</p>
+<!-- VISUAL -->
+<section class="section mb-3">
+  <canvas id="scope" class="w-full h-28"></canvas>
 </section>
 
-<!-- POWER & MIC -->
-<section class="grid grid-cols-2 gap-3 mb-4">
+<!-- CONTROLES PRINCIPAIS -->
+<section class="grid grid-cols-2 gap-3 mb-3">
   <button id="powerBtn"
-    class="py-3 rounded-xl bg-green-700 text-white font-bold shadow">
+    class="py-4 rounded-xl bg-green-700 font-bold text-white">
     LIGAR
   </button>
+
   <button id="micBtn"
-    class="py-3 rounded-xl bg-yellow-600 text-black font-bold shadow">
+    class="py-4 rounded-xl bg-yellow-500 font-bold text-black">
     MIC ON
   </button>
 </section>
 
 <!-- INPUT -->
-<section class="section mb-4">
-  <h2 class="text-sm font-bold mb-2 text-red-400">INPUT</h2>
-
-  <div class="slider-label">
-    <span>Gain</span><span id="gainVal">3.0</span>
-  </div>
-  <input id="gain" type="range" min="0" max="10" step="0.1" value="3" class="w-full">
+<section class="section mb-3">
+  <label>INPUT GAIN</label>
+  <input id="gain" type="range" min="0" max="10" step="0.1" value="3">
 </section>
 
 <!-- COMPRESSOR -->
-<section class="section mb-4">
-  <h2 class="text-sm font-bold mb-3 text-blue-400">COMPRESSOR</h2>
-
-  <div class="slider-label">
-    <span>Threshold</span><span id="compVal">12</span>
-  </div>
-  <input id="comp" type="range" min="0" max="30" value="12" class="w-full">
+<section class="section mb-3">
+  <label>COMPRESSOR (Threshold)</label>
+  <input id="comp" type="range" min="0" max="30" value="12">
 </section>
 
 <!-- MASTER -->
 <section class="section">
-  <h2 class="text-sm font-bold mb-2 text-green-400">MASTER</h2>
+  <label>MASTER VOLUME</label>
+  <input id="volume" type="range" min="0" max="1.5" step="0.05" value="0.8">
+</section>
 
-  <div class="slider-label">
-    <span>Volume</span><span id="volVal">80%</span>
-  </div>
-  <input id="volume" type="range" min="0" max="1.5" step="0.05" value="0.8" class="w-full">
-<
+<footer class="text-center mt-4 text-[9px] text-gray-500">
+  BassFX • Web Audio • PWA Ready
+</footer>
+
+<script>
+/* ================= AUDIO ENGINE MOBILE ================= */
+
+let ctx,mic,gainNode,compressor,master,analyser,stream;
+let running=false,micOn=true;
+
+const powerBtn=document.getElementById("powerBtn");
+const micBtn=document.getElementById("micBtn");
+const scope=document.getElementById("scope");
+const c=scope.getContext("2d");
+
+const gain=document.getElementById("gain");
+const comp=document.getElementById("comp");
+const volume=document.getElementById("volume");
+
+/* ----- START / STOP ----- */
+powerBtn.onclick=async()=>{
+ if(!running){
+  ctx=new AudioContext({
+    latencyHint:"interactive",
+    sampleRate:44100
+  });
+
+  stream=await navigator.mediaDevices.getUserMedia({
+    audio:{
+      echoCancellation:false,
+      noiseSuppression:false,
+      autoGainControl:false,
+      channelCount:1
+    }
+  });
+
+  mic=ctx.createMediaStreamSource(stream);
+
+  gainNode=ctx.createGain();
+  gainNode.gain.value=gain.value;
+
+  compressor=ctx.createDynamicsCompressor();
+  compressor.threshold.value=-comp.value;
+  compressor.ratio.value=4;
+  compressor.attack.value=0.003;
+  compressor.release.value=0.25;
+
+  master=ctx.createGain();
+  master.gain.value=volume.value;
+
+  analyser=ctx.createAnalyser();
+  analyser.fftSize=1024;
+
+  mic.connect(gainNode)
+     .connect(compressor)
+     .connect(master)
+     .connect(analyser)
+     .connect(ctx.destination);
+
+  running=true;
+  powerBtn.textContent="DESLIGAR";
+  powerBtn.classList.replace("bg-green-700","bg-red-700");
+  draw();
+
+ } else {
+  ctx.close();
+  stream.getTracks().forEach(t=>t.stop());
+  running=false;
+  powerBtn.textContent="LIGAR";
+  powerBtn.classList.replace("bg-red-700","bg-green-700");
+ }
+};
+
+/* ----- MIC ON / OFF ----- */
+micBtn.onclick=()=>{
+ micOn=!micOn;
+ gainNode && (gainNode.gain.value=micOn?gain.value:0);
+ micBtn.textContent=micOn?"MIC ON":"MIC OFF";
+ micBtn.classList.toggle("bg-gray-600",!micOn);
+};
+
+/* ----- CONTROLES ----- */
+gain.oninput=e=>gainNode&&(gainNode.gain.value=e.target.value);
+comp.oninput=e=>compressor&&(compressor.threshold.value=-e.target.value);
+volume.oninput=e=>master&&(master.gain.value=e.target.value);
+
+/* ----- VISUAL ----- */
+function draw(){
+ if(!running) return;
+ requestAnimationFrame(draw);
+
+ scope.width=scope.offsetWidth;
+ scope.height=scope.offsetHeight;
+
+ const data=new Uint8Array(analyser.fftSize);
+ analyser.getByteTimeDomainData(data);
+
+ c.fillStyle="#000";
+ c.fillRect(0,0,scope.width,scope.height);
+
+ c.strokeStyle="#ef4444";
+ c.beginPath();
+
+ for(let i=0;i<data.length;i+=2){
+  const x=i*scope.width/data.length;
+  const y=(data[i]/255)*scope.height;
+  i?c.lineTo(x,y):c.moveTo(x,y);
+ }
+ c.stroke();
+}
+
+/* ----- PWA INLINE ----- */
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register(
+  URL.createObjectURL(
+   new Blob([`self.addEventListener("fetch",e=>e.respondWith(fetch(e.request)))`],
+   {type:"application/javascript"})
+  )
+ );
+}
+</script>
+
+</body>
+</html>
