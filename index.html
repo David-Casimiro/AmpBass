@@ -4,77 +4,75 @@
 <meta charset="UTF-8">
 <title>BassFX Mobile</title>
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="theme-color" content="#020617">
 
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
 html,body{
-  background:#020617;
-  color:#e5e7eb;
-  font-family:system-ui,-apple-system,sans-serif;
-  touch-action:manipulation;
+ background:#020617;
+ color:#e5e7eb;
+ font-family:system-ui,-apple-system,sans-serif;
+ touch-action:manipulation;
 }
-canvas{background:#000;border-radius:10px}
+canvas{
+ background:#000;
+ border-radius:12px;
+}
 .section{
-  border:1px solid #1e293b;
-  border-radius:18px;
-  padding:1rem;
+ border:1px solid #1e293b;
+ border-radius:18px;
+ padding:1rem;
 }
 label{
-  font-size:0.7rem;
-  color:#9ca3af;
+ font-size:0.7rem;
+ color:#9ca3af;
 }
 input[type=range]{touch-action:none}
-button:active{transform:scale(.96)}
+button:active{transform:scale(.95)}
 </style>
 </head>
 
 <body class="p-3 max-w-md mx-auto">
 
-<!-- HEADER -->
 <header class="text-center mb-3">
-  <h1 class="text-xl font-bold">🎸 BassFX</h1>
-  <p class="text-[10px] text-gray-400">Gain & Master – Mobile</p>
+ <h1 class="text-xl font-bold">🎸 BassFX</h1>
+ <p class="text-[10px] text-gray-400">Modo LINE • Baixa Latência</p>
 </header>
 
-<!-- VISUAL -->
 <section class="section mb-3">
-  <canvas id="scope" class="w-full h-28"></canvas>
+ <canvas id="scope" class="w-full h-28"></canvas>
 </section>
 
-<!-- BOTÕES -->
 <section class="grid grid-cols-2 gap-3 mb-3">
-  <button id="powerBtn"
-    class="py-4 rounded-xl bg-green-700 font-bold text-white">
-    LIGAR
-  </button>
+ <button id="powerBtn"
+  class="py-4 rounded-xl bg-green-700 font-bold text-white">
+  LIGAR
+ </button>
 
-  <button id="micBtn"
-    class="py-4 rounded-xl bg-yellow-500 font-bold text-black">
-    MIC ON
-  </button>
+ <button id="micBtn"
+  class="py-4 rounded-xl bg-yellow-500 font-bold text-black">
+  MIC ON
+ </button>
 </section>
 
-<!-- INPUT GAIN -->
 <section class="section mb-3">
-  <label>INPUT GAIN</label>
-  <input id="gain" type="range" min="0" max="10" step="0.1" value="3">
+ <label>INPUT GAIN (LINE)</label>
+ <input id="gain" type="range" min="0" max="6" step="0.05" value="1">
 </section>
 
-<!-- MASTER VOLUME -->
 <section class="section">
-  <label>MASTER VOLUME</label>
-  <input id="volume" type="range" min="0" max="1.5" step="0.05" value="0.8">
+ <label>MASTER VOLUME</label>
+ <input id="volume" type="range" min="0" max="1.2" step="0.05" value="0.9">
 </section>
 
 <footer class="text-center mt-4 text-[9px] text-gray-500">
-  BassFX • Simples • Estável • PWA
+ BassFX • Line Ready • Mobile • PWA
 </footer>
 
 <script>
-/* ================= AUDIO ENGINE ================= */
+/* =============== AUDIO ENGINE ================= */
 
 let ctx, mic, gainNode, master, analyser, stream;
 let running=false, micOn=true;
@@ -87,33 +85,39 @@ const c=scope.getContext("2d");
 const gain=document.getElementById("gain");
 const volume=document.getElementById("volume");
 
-/* ----- START / STOP ----- */
-powerBtn.onclick=async ()=>{
+/* -------- START / STOP -------- */
+powerBtn.onclick=async()=>{
  if(!running){
+  const AudioContext = window.AudioContext||window.webkitAudioContext;
+
   ctx=new AudioContext({
-    latencyHint:"interactive",
-    sampleRate:44100
+   latencyHint:"interactive",
+   sampleRate:48000
   });
 
+  if(ctx.state==="suspended") await ctx.resume();
+
   stream=await navigator.mediaDevices.getUserMedia({
-    audio:{
-      echoCancellation:false,
-      noiseSuppression:false,
-      autoGainControl:false,
-      channelCount:1
-    }
+   audio:{
+    echoCancellation:false,
+    noiseSuppression:false,
+    autoGainControl:false,
+    latency:0,
+    channelCount:1
+   }
   });
 
   mic=ctx.createMediaStreamSource(stream);
 
   gainNode=ctx.createGain();
-  gainNode.gain.value=gain.value;
+  gainNode.gain.value=+gain.value;
 
   master=ctx.createGain();
-  master.gain.value=volume.value;
+  master.gain.value=+volume.value;
 
   analyser=ctx.createAnalyser();
   analyser.fftSize=1024;
+  analyser.smoothingTimeConstant=0.85;
 
   mic.connect(gainNode)
      .connect(master)
@@ -125,7 +129,7 @@ powerBtn.onclick=async ()=>{
   powerBtn.classList.replace("bg-green-700","bg-red-700");
   draw();
 
- } else {
+ }else{
   ctx.close();
   stream.getTracks().forEach(t=>t.stop());
   running=false;
@@ -134,19 +138,23 @@ powerBtn.onclick=async ()=>{
  }
 };
 
-/* ----- MIC ON / OFF ----- */
+/* -------- MIC ON / OFF -------- */
 micBtn.onclick=()=>{
  micOn=!micOn;
- gainNode && (gainNode.gain.value = micOn ? gain.value : 0);
+ if(gainNode) gainNode.gain.value = micOn ? +gain.value : 0;
  micBtn.textContent = micOn ? "MIC ON" : "MIC OFF";
- micBtn.classList.toggle("bg-gray-600", !micOn);
+ micBtn.classList.toggle("bg-gray-600",!micOn);
 };
 
-/* ----- CONTROLES ----- */
-gain.oninput = e => gainNode && (gainNode.gain.value = e.target.value);
-volume.oninput = e => master && (master.gain.value = e.target.value);
+/* -------- CONTROLES -------- */
+gain.oninput=e=>{
+ if(gainNode && micOn) gainNode.gain.value=+e.target.value;
+};
+volume.oninput=e=>{
+ if(master) master.gain.value=+e.target.value;
+};
 
-/* ----- VISUAL ----- */
+/* -------- VISUAL -------- */
 function draw(){
  if(!running) return;
  requestAnimationFrame(draw);
@@ -160,9 +168,10 @@ function draw(){
  c.fillStyle="#000";
  c.fillRect(0,0,scope.width,scope.height);
  c.strokeStyle="#ef4444";
+ c.lineWidth=2;
  c.beginPath();
 
- for(let i=0;i<data.length;i+=2){
+ for(let i=0;i<data.length;i+=3){
   const x=i*scope.width/data.length;
   const y=(data[i]/255)*scope.height;
   i?c.lineTo(x,y):c.moveTo(x,y);
@@ -170,8 +179,8 @@ function draw(){
  c.stroke();
 }
 
-/* ----- PWA INLINE ----- */
-if('serviceWorker' in navigator){
+/* -------- PWA (GitHub Pages OK) -------- */
+if('serviceWorker'in navigator){
  navigator.serviceWorker.register(
   URL.createObjectURL(
    new Blob(
