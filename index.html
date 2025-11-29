@@ -2,17 +2,17 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-
 <title>BassFX PWA</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#111111">
 
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<!-- ÍCONE EMBUTIDO (BASE64) -->
+<link rel="icon" sizes="192x192" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAAAAAB3tzPbAAAACXBIWXMAAAsSAAALEgHS3X78AAA...">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAAAAAB3tzPbAAA...">
 
 <style>
 body { background:#111; color:#eee; font-family:sans-serif }
@@ -22,25 +22,29 @@ button{ padding:10px; font-weight:bold }
 </style>
 </head>
 
-<body>
+<body class="p-4 max-w-xl mx-auto">
 
-<h1 style="text-align:center">🎸 BassFX PWA</h1>
+<h1 class="text-center text-2xl mb-2">🎸 BassFX</h1>
+<p class="text-center text-xs text-gray-400 mb-4">PWA – Baixo em Tempo Real</p>
 
 <canvas id="scope"></canvas>
 
-<button id="powerBtn">LIGAR ÁUDIO</button>
-<button id="micBtn">MIC ON</button>
+<div class="grid grid-cols-2 gap-2 my-4">
+<button id="powerBtn" class="bg-green-700">LIGAR</button>
+<button id="micBtn" class="bg-yellow-600">MIC ON</button>
+</div>
 
 <label>Gain</label>
 <input type="range" id="gain" min="0" max="10" step="0.1" value="3">
 
 <label>Compressor</label>
-<input type="range" id="comp" min="0" max="20" value="10">
+<input type="range" id="comp" min="0" max="30" value="12">
 
 <label>Master</label>
 <input type="range" id="volume" min="0" max="1.5" step="0.05" value="0.8">
 
 <script>
+/* -------- AUDIO -------- */
 let ctx, mic, gainNode, compressor, analyser, master, stream;
 let running=false, micOn=true;
 
@@ -51,17 +55,19 @@ const c=scope.getContext("2d");
 
 powerBtn.onclick=async()=>{
  if(!running){
-  ctx=new AudioContext();
+  ctx=new AudioContext({latencyHint:"interactive"});
   stream=await navigator.mediaDevices.getUserMedia({audio:true});
   mic=ctx.createMediaStreamSource(stream);
 
   gainNode=ctx.createGain();
   compressor=ctx.createDynamicsCompressor();
+  compressor.threshold.value=-12;
+  compressor.ratio.value=4;
+  compressor.attack.value=0.005;
+  compressor.release.value=0.2;
+
   master=ctx.createGain();
   analyser=ctx.createAnalyser();
-
-  gainNode.gain.value=3;
-  master.gain.value=0.8;
 
   mic.connect(gainNode);
   gainNode.connect(compressor);
@@ -71,31 +77,39 @@ powerBtn.onclick=async()=>{
 
   running=true;
   powerBtn.innerText="DESLIGAR";
+  powerBtn.className="bg-red-700";
   draw();
  } else {
   ctx.close();
   stream.getTracks().forEach(t=>t.stop());
   running=false;
-  powerBtn.innerText="LIGAR ÁUDIO";
+  powerBtn.innerText="LIGAR";
+  powerBtn.className="bg-green-700";
  }
 };
 
 micBtn.onclick=()=>{
  micOn=!micOn;
- gainNode.gain.value= micOn ? document.getElementById("gain").value : 0;
+ gainNode.gain.value= micOn ? gain.value : 0;
  micBtn.innerText= micOn ? "MIC ON" : "MIC OFF";
+ micBtn.className= micOn ? "bg-yellow-600" : "bg-gray-500";
 };
 
 gain.oninput=e=> gainNode && (gainNode.gain.value=e.target.value);
 volume.oninput=e=> master && (master.gain.value=e.target.value);
-comp.oninput=e=> compressor && (compressor.threshold.value= -e.target.value);
+comp.oninput=e=> compressor && (compressor.threshold.value=-e.target.value);
 
 function draw(){
+ if(!running) return;
  requestAnimationFrame(draw);
  const data=new Uint8Array(analyser.fftSize);
  analyser.getByteTimeDomainData(data);
- c.fillStyle="#000"; c.fillRect(0,0,scope.width,scope.height);
- c.strokeStyle="red"; c.beginPath();
+ scope.width=scope.offsetWidth;
+ scope.height=scope.offsetHeight;
+ c.fillStyle="#000";
+ c.fillRect(0,0,scope.width,scope.height);
+ c.strokeStyle="red";
+ c.beginPath();
  data.forEach((v,i)=>{
   const x=i*scope.width/data.length;
   const y=(v/255)*scope.height;
@@ -106,8 +120,42 @@ function draw(){
 </script>
 
 <script>
+/* -------- PWA (MANIFEST + SERVICE WORKER INLINE) -------- */
+
+// Manifest Dinâmico
+const manifest = {
+  name: "BassFX",
+  short_name: "BassFX",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#111111",
+  theme_color: "#111111",
+  icons: [{
+    src: document.querySelector("link[rel='icon']").href,
+    sizes: "192x192",
+    type: "image/png"
+  }]
+};
+
+const manifestBlob = new Blob([JSON.stringify(manifest)], {type:"application/json"});
+const manifestURL = URL.createObjectURL(manifestBlob);
+const link = document.createElement("link");
+link.rel = "manifest";
+link.href = manifestURL;
+document.head.appendChild(link);
+
+// Service Worker Inline
 if('serviceWorker' in navigator){
- navigator.serviceWorker.register('service-worker.js');
+ const swCode = `
+ self.addEventListener("install", e=>{
+  self.skipWaiting();
+ });
+ self.addEventListener("fetch", e=>{
+  e.respondWith(fetch(e.request).catch(()=>new Response("Offline")));
+ });
+ `;
+ const swBlob = new Blob([swCode], {type:"application/javascript"});
+ navigator.serviceWorker.register(URL.createObjectURL(swBlob));
 }
 </script>
 
