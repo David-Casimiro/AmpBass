@@ -1,3 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BassFX Mobile</title>
+
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#020617">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+html,body{
+ background:#020617;
+ color:#e5e7eb;
+ font-family:system-ui,-apple-system,sans-serif;
+}
+canvas{
+ background:#000;
+ border-radius:12px;
+}
+.section{
+ border:1px solid #1e293b;
+ border-radius:18px;
+ padding:1rem;
+}
+label{
+ font-size:.7rem;
+ color:#9ca3af;
+}
+</style>
+</head>
+
+<body class="p-3 max-w-md mx-auto">
+
+<header class="text-center mb-3">
+ <h1 class="text-xl font-bold">🎸 BassFX</h1>
+ <p class="text-[10px] text-gray-400">
+  Entrada: P2 • Saída: Bluetooth
+ </p>
+</header>
+
+<section class="section mb-3">
+ <canvas id="scope" class="w-full h-28"></canvas>
+</section>
+
+<section class="grid grid-cols-2 gap-3 mb-3">
+ <button id="powerBtn" class="py-4 rounded-xl bg-green-700 font-bold">LIGAR</button>
+ <button id="micBtn" class="py-4 rounded-xl bg-yellow-500 font-bold text-black">MIC ON</button>
+</section>
+
+<section class="section mb-3">
+ <label>INPUT GAIN (P2)</label>
+ <input id="gain" type="range" min="0" max="6" step="0.05" value="1">
+</section>
+
+<section class="section">
+ <label>MASTER (BLUETOOTH)</label>
+ <input id="volume" type="range" min="0" max="1.2" step="0.05" value="0.9">
+</section>
+
+<footer class="text-center mt-4 text-[9px] text-gray-500">
+ BassFX • Line Ready • Mobile
+</footer>
+
 <script>
 let ctx, mic, gainNode, master, analyser, stream;
 let running=false, micOn=true;
@@ -8,27 +73,29 @@ const gain=document.getElementById("gain");
 const volume=document.getElementById("volume");
 const scope=document.getElementById("scope");
 const c=scope.getContext("2d");
-const inputStatus=document.getElementById("inputStatus");
 
-/* ===== DETECTAR USB AUDIO ===== */
-async function detectInputDevice(){
+/* ===== Selecionar MIC P2 ===== */
+async function getP2Mic(){
  const devices=await navigator.mediaDevices.enumerateDevices();
-
- const usb=devices.find(d=>
+ return devices.find(d=>
   d.kind==="audioinput" &&
-  /usb|audio|codec|interface/i.test(d.label)
+  /wired|headset|microfone|p2/i.test(d.label)
  );
-
- if(usb){
-  inputStatus.textContent=`Entrada: ${usb.label || "USB Audio"}`;
-  return {deviceId:{exact:usb.deviceId}};
- }
-
- inputStatus.textContent="Entrada: Microfone interno";
- return true;
 }
 
-/* ===== POWER ===== */
+/* ===== Selecionar Saída Bluetooth ===== */
+async function setBluetoothOutput(){
+ const devices=await navigator.mediaDevices.enumerateDevices();
+ const bt=devices.find(d=>
+  d.kind==="audiooutput" &&
+  /bluetooth|bt/i.test(d.label)
+ );
+ if(bt && typeof master.setSinkId==="function"){
+  await master.setSinkId(bt.deviceId);
+ }
+}
+
+/* ===== LIGAR / DESLIGAR ===== */
 powerBtn.onclick=async()=>{
  if(running){
   ctx.close();
@@ -36,7 +103,6 @@ powerBtn.onclick=async()=>{
   running=false;
   powerBtn.textContent="LIGAR";
   powerBtn.classList.replace("bg-red-700","bg-green-700");
-  inputStatus.textContent="Entrada: desligado";
   return;
  }
 
@@ -44,11 +110,11 @@ powerBtn.onclick=async()=>{
  ctx=new AudioContext({latencyHint:"interactive",sampleRate:48000});
  await ctx.resume();
 
- const inputConstraint=await detectInputDevice();
+ const p2=await getP2Mic();
 
  stream=await navigator.mediaDevices.getUserMedia({
   audio:{
-   deviceId: inputConstraint.deviceId,
+   deviceId: p2?.deviceId ? {exact:p2.deviceId}:undefined,
    echoCancellation:false,
    noiseSuppression:false,
    autoGainControl:false,
@@ -66,12 +132,10 @@ powerBtn.onclick=async()=>{
 
  analyser=ctx.createAnalyser();
  analyser.fftSize=1024;
- analyser.smoothingTimeConstant=0.85;
 
- mic.connect(gainNode)
-    .connect(master)
-    .connect(analyser)
-    .connect(ctx.destination);
+ mic.connect(gainNode).connect(master).connect(analyser).connect(ctx.destination);
+
+ await setBluetoothOutput();
 
  running=true;
  powerBtn.textContent="DESLIGAR";
@@ -79,7 +143,7 @@ powerBtn.onclick=async()=>{
  draw();
 };
 
-/* ===== MIC ON / OFF ===== */
+/* ===== MIC ON/OFF ===== */
 micBtn.onclick=()=>{
  micOn=!micOn;
  if(gainNode) gainNode.gain.value=micOn?+gain.value:0;
@@ -119,3 +183,6 @@ function draw(){
  c.stroke();
 }
 </script>
+
+</body>
+</html>
