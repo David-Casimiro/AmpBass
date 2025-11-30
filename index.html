@@ -2,287 +2,233 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
-<title>BassFX Mobile — PWA</title>
-
-<link rel="manifest" href="/manifest.json">
+<title>BassFX PWA — Ampero Mini</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="theme-color" content="#020617">
+
+<!-- iOS / PWA hints -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-<!-- Tailwind CDN (rápido) -->
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-  html,body{
-    background:#020617;
-    color:#e5e7eb;
-    font-family:system-ui,-apple-system,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    -moz-osx-font-smoothing:grayscale;
-    height:100%;
-  }
-  .section{
-    border:1px solid #1e293b;
-    border-radius:18px;
-    padding:1rem;
-    background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
-  }
-  label{ font-size:.7rem; color:#9ca3af; display:block; margin-bottom:.4rem; }
-  canvas{ background:#000; border-radius:12px; display:block; width:100%; height:120px; }
-  .pill{ padding:.6rem 1rem; border-radius:12px; font-weight:700; }
+html,body{
+  background:#020617;
+  color:#e5e7eb;
+  font-family:system-ui,-apple-system,sans-serif;
+  height:100%;
+}
+.section{
+  border:1px solid #1e293b;
+  border-radius:18px;
+  padding:1rem;
+}
+label{font-size:.7rem;color:#9ca3af}
+canvas{background:#000;border-radius:12px;width:100%;height:120px}
+.btn{padding:1rem;border-radius:16px;font-weight:800}
 </style>
 </head>
-<body class="p-4 max-w-md mx-auto min-h-screen flex flex-col">
+
+<body class="p-4 max-w-md mx-auto flex flex-col min-h-screen">
 
 <header class="text-center mb-3">
   <h1 class="text-xl font-bold">🎸 BassFX PWA</h1>
-  <p class="text-[10px] text-gray-400">Otimizador Ampero Mini • USB Audio</p>
+  <p class="text-[10px] text-gray-400">Ampero Mini • USB Audio • Line Ready</p>
 </header>
 
 <main class="flex-1">
   <section class="section mb-3">
     <canvas id="scope"></canvas>
-    <div id="status" class="text-[11px] text-gray-400 mt-2">Status: <span id="statustxt">Desconectado</span></div>
+    <div class="text-[11px] text-gray-400 mt-2">
+      Status: <span id="status">Desconectado</span>
+    </div>
   </section>
 
   <section class="grid grid-cols-2 gap-3 mb-3">
-    <button id="powerBtn" class="pill bg-green-700 text-white" aria-pressed="false">LIGAR</button>
-    <button id="micBtn" class="pill bg-yellow-500 text-black">MIC ON</button>
+    <button id="power" class="btn bg-green-700">LIGAR</button>
+    <button id="mic" class="btn bg-yellow-500 text-black">MIC ON</button>
   </section>
 
   <section class="section mb-3">
-    <label for="gain">INPUT GAIN (LINE)</label>
+    <label>INPUT GAIN (LINE)</label>
     <input id="gain" type="range" min="0.5" max="1.5" step="0.01" value="1" class="w-full">
   </section>
 
-  <section class="section mb-3">
-    <label for="volume">MASTER (OUTPUT)</label>
+  <section class="section">
+    <label>MASTER</label>
     <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" class="w-full">
-  </section>
-
-  <section class="section mb-3">
-    <label>INFO</label>
-    <ul class="text-xs text-gray-400 space-y-1">
-      <li>Conecte o Ampero Mini via <strong>USB-C OTG</strong>.</li>
-      <li>Evite usar saída P2 → P2; utilize USB (ou adaptador DAC ativo).</li>
-      <li>Recomendado: sampleRate 48 kHz — mantém qualidade e reduz latência.</li>
-    </ul>
   </section>
 </main>
 
-<footer class="text-center mt-4 text-[10px] text-gray-500">
-  BassFX • Line Ready • PWA
+<footer class="text-center text-[10px] text-gray-500 mt-4">
+  BassFX • PWA • USB Audio
 </footer>
 
 <script>
-/* ============================
-   PWA: registra service worker
-   ============================ */
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=> {
-    navigator.serviceWorker.register('/sw.js').catch(err=>{
-      console.warn('SW registration failed:', err);
-    });
-  });
-}
+/* =====================================================
+   SINGLE-FILE PWA (manifest + serviceWorker inline)
+   ===================================================== */
+(function(){
+  const manifest = {
+    name: "BassFX PWA",
+    short_name: "BassFX",
+    start_url: ".",
+    display: "standalone",
+    theme_color: "#020617",
+    background_color: "#020617",
+    description: "BassFX — otimizado para Ampero Mini USB",
+    icons: [{
+      src: "data:image/svg+xml;utf8,"+encodeURIComponent(`
+        <svg xmlns='http://www.w3.org/2000/svg' width='512' height='512'>
+          <rect width='512' height='512' rx='96' fill='#020617'/>
+          <text x='50%' y='55%' text-anchor='middle' font-size='220'>🎸</text>
+        </svg>`),
+      sizes: "512x512",
+      type: "image/svg+xml"
+    }]
+  };
 
-/* ============================
-   Variáveis e DOM
-   ============================ */
-let ctxAudio, micSource, inputTrim, gainNode, limiter, master, analyser, stream;
-let running = false, micOn = true;
+  const link = document.createElement("link");
+  link.rel = "manifest";
+  link.href = URL.createObjectURL(new Blob(
+    [JSON.stringify(manifest)],
+    {type:"application/json"}
+  ));
+  document.head.appendChild(link);
 
-const powerBtn = document.getElementById('powerBtn');
-const micBtn = document.getElementById('micBtn');
-const gain = document.getElementById('gain');
-const volume = document.getElementById('volume');
-const scope = document.getElementById('scope');
-const c = scope.getContext('2d');
-const statusEl = document.getElementById('statustxt');
+  if("serviceWorker" in navigator){
+    const swCode = `
+      self.addEventListener("install", e=>{
+        self.skipWaiting();
+      });
+      self.addEventListener("activate", e=>{
+        self.clients.claim();
+      });
+      self.addEventListener("fetch", e=>{
+        e.respondWith(fetch(e.request).catch(()=>new Response("",{status:504})));
+      });
+    `;
+    const swBlob = new Blob([swCode],{type:"text/javascript"});
+    navigator.serviceWorker.register(URL.createObjectURL(swBlob));
+  }
+})();
 
-/* ============================
-   Função: detecta Ampero Mini USB
-   ============================ */
-async function getAmperoMiniInput(){
-  const devices = await navigator.mediaDevices.enumerateDevices();
+/* =====================================================
+   AUDIO ENGINE — AMPER0 MINI USB ONLY
+   ===================================================== */
+let ctx, source, trim, gainNode, limiter, master, analyser, stream;
+let running=false, micOn=true;
 
-  // Procura palavras-chaves com maior probabilidade
-  const ampero = devices.find(d =>
-    d.kind === 'audioinput' &&
-    /ampero|hotone|ampero mini|hotone ampero|usb audio|uac/i.test(d.label)
+const $=id=>document.getElementById(id);
+const scope=$("scope"), c=scope.getContext("2d");
+
+async function getAmpero(){
+  const devs=await navigator.mediaDevices.enumerateDevices();
+  return devs.find(d=>
+    d.kind==="audioinput" &&
+    /ampero|hotone|usb audio|uac/i.test(d.label)
   );
-
-  return ampero || null;
 }
 
-/* ============================
-   Cria e configura AudioChain otimizdo para LINE/Ampero
-   ============================ */
-async function startAudio(){
-  if(running) return;
-
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  ctxAudio = new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 });
-  await ctxAudio.resume();
-
-  const ampero = await getAmperoMiniInput();
-  if(!ampero){
-    statusEl.textContent = 'Ampero Mini não detectado — conecte via USB OTG';
-    alert('Ampero Mini (USB) não detectado. Conecte o pedal via USB OTG e tente novamente.');
-    ctxAudio.close();
+$("power").onclick=async()=>{
+  if(running){
+    ctx.close();
+    stream.getTracks().forEach(t=>t.stop());
+    running=false;
+    $("power").textContent="LIGAR";
+    $("power").className="btn bg-green-700";
+    $("status").textContent="Desconectado";
     return;
   }
 
-  // getUserMedia com deviceId exato (estéreo, 48k)
-  stream = await navigator.mediaDevices.getUserMedia({
+  const dev=await getAmpero();
+  if(!dev){
+    alert("Ampero Mini USB não detectado");
+    return;
+  }
+
+  ctx=new (window.AudioContext||webkitAudioContext)({
+    latencyHint:"interactive",
+    sampleRate:48000
+  });
+
+  stream=await navigator.mediaDevices.getUserMedia({
     audio:{
-      deviceId: { exact: ampero.deviceId },
-      channelCount: 2,
-      sampleRate: 48000,
-      sampleSize: 16,
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false
+      deviceId:{exact:dev.deviceId},
+      channelCount:2,
+      sampleRate:48000,
+      echoCancellation:false,
+      noiseSuppression:false,
+      autoGainControl:false
     }
   });
 
-  micSource = ctxAudio.createMediaStreamSource(stream);
+  source=ctx.createMediaStreamSource(stream);
 
-  // Trim de entrada para sinais LINE
-  inputTrim = ctxAudio.createGain();
-  inputTrim.gain.value = 0.8;
+  trim=ctx.createGain(); trim.gain.value=.8;
+  gainNode=ctx.createGain(); gainNode.gain.value=+$("gain").value;
 
-  // Controle de ganho (ligado ao slider)
-  gainNode = ctxAudio.createGain();
-  gainNode.gain.value = +gain.value;
+  limiter=ctx.createDynamicsCompressor();
+  limiter.threshold.value=-6;
+  limiter.ratio.value=12;
+  limiter.attack.value=0.003;
+  limiter.release.value=0.25;
 
-  // Limiter / compressor simples para proteção
-  limiter = ctxAudio.createDynamicsCompressor();
-  limiter.threshold.value = -6;
-  limiter.knee.value = 0;
-  limiter.ratio.value = 12;
-  limiter.attack.value = 0.003;
-  limiter.release.value = 0.25;
+  master=ctx.createGain(); master.gain.value=+$("volume").value;
+  analyser=ctx.createAnalyser(); analyser.fftSize=1024;
 
-  // Master
-  master = ctxAudio.createGain();
-  master.gain.value = +volume.value;
+  source.connect(trim).connect(gainNode)
+    .connect(limiter).connect(master)
+    .connect(analyser).connect(ctx.destination);
 
-  // Analiser para oscilloscope
-  analyser = ctxAudio.createAnalyser();
-  analyser.fftSize = 1024;
+  running=true;
+  $("power").textContent="DESLIGAR";
+  $("power").className="btn bg-red-700";
+  $("status").textContent="Ampero Mini USB conectado";
+  draw();
+};
 
-  // Routing
-  micSource
-    .connect(inputTrim)
-    .connect(gainNode)
-    .connect(limiter)
-    .connect(master)
-    .connect(analyser)
-    .connect(ctxAudio.destination);
+$("mic").onclick=()=>{
+  micOn=!micOn;
+  gainNode && (gainNode.gain.value=micOn?+$("gain").value:0);
+  $("mic").textContent=micOn?"MIC ON":"MIC OFF";
+};
 
-  running = true;
-  statusEl.textContent = 'Conectado: Ampero Mini (USB)';
-  powerBtn.textContent = 'DESLIGAR';
-  powerBtn.classList.replace('bg-green-700','bg-red-700');
-  powerBtn.setAttribute('aria-pressed','true');
+$("gain").oninput=e=>{
+  gainNode && micOn && (gainNode.gain.value=+e.target.value);
+};
+$("volume").oninput=e=>{
+  master && (master.gain.value=+e.target.value);
+};
 
-  drawScope();
-}
-
-/* ============================
-   Para audio e libera recursos
-   ============================ */
-function stopAudio(){
+/* =====================================================
+   OSCILLOSCOPE
+   ===================================================== */
+function draw(){
   if(!running) return;
-  if(ctxAudio && typeof ctxAudio.close === 'function') ctxAudio.close();
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  running = false;
-  statusEl.textContent = 'Desconectado';
-  powerBtn.textContent = 'LIGAR';
-  powerBtn.classList.replace('bg-red-700','bg-green-700');
-  powerBtn.setAttribute('aria-pressed','false');
-}
+  requestAnimationFrame(draw);
 
-/* ============================
-   Botões e controles
-   ============================ */
-powerBtn.addEventListener('click', async ()=>{
-  if(running){
-    stopAudio();
-  } else {
-    try{
-      await startAudio();
-    }catch(err){
-      console.error(err);
-      stopAudio();
-    }
-  }
-});
+  scope.width=scope.offsetWidth;
+  scope.height=scope.offsetHeight;
 
-micBtn.addEventListener('click', ()=>{
-  micOn = !micOn;
-  if(gainNode) gainNode.gain.value = micOn ? +gain.value : 0;
-  micBtn.textContent = micOn ? 'MIC ON' : 'MIC OFF';
-});
-
-gain.addEventListener('input', e=>{
-  if(gainNode && micOn) gainNode.gain.value = +e.target.value;
-});
-
-volume.addEventListener('input', e=>{
-  if(master) master.gain.value = +e.target.value;
-});
-
-/* ============================
-   Oscilloscope (visual)
-   ============================ */
-function drawScope(){
-  if(!running || !analyser) return;
-  requestAnimationFrame(drawScope);
-
-  // ajustar canvas pixel ratio
-  const DPR = window.devicePixelRatio || 1;
-  scope.width = scope.offsetWidth * DPR;
-  scope.height = scope.offsetHeight * DPR;
-  c.scale(DPR, DPR);
-
-  const width = scope.offsetWidth;
-  const height = scope.offsetHeight;
-
-  const data = new Uint8Array(analyser.fftSize);
+  const data=new Uint8Array(analyser.fftSize);
   analyser.getByteTimeDomainData(data);
 
-  c.fillStyle = '#000';
-  c.fillRect(0,0,width,height);
-
-  c.strokeStyle = '#ef4444';
-  c.lineWidth = 2;
+  c.fillStyle="#000";
+  c.fillRect(0,0,scope.width,scope.height);
+  c.strokeStyle="#ef4444";
+  c.lineWidth=2;
   c.beginPath();
 
-  const step = 3;
-  for(let i=0;i<data.length;i+=step){
-    const x = i * width / data.length;
-    const y = (data[i] / 255) * height;
-    if(i===0) c.moveTo(x,y);
-    else c.lineTo(x,y);
+  for(let i=0;i<data.length;i+=3){
+    const x=i*scope.width/data.length;
+    const y=data[i]/255*scope.height;
+    i?c.lineTo(x,y):c.moveTo(x,y);
   }
   c.stroke();
 }
-
-/* ============================
-   Mensagem amigável se permissão negada
-   ============================ */
-navigator.permissions && navigator.permissions.query({name:'microphone'}).then(p=>{
-  if(p.state === 'denied') statusEl.textContent = 'Permissão de microfone negada';
-}).catch(()=>{});
-
-/* ============================
-   Dica: ativar autorun em conexões futuras (opcional)
-   ============================ */
-// Você pode pedir ao usuário clicar em "LIGAR" após conectar o Ampero.
-
 </script>
 </body>
 </html>
