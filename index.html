@@ -14,7 +14,6 @@ html,body{
  background:#020617;
  color:#e5e7eb;
  font-family:system-ui,-apple-system,sans-serif;
- touch-action:manipulation;
 }
 canvas{
  background:#000;
@@ -26,11 +25,9 @@ canvas{
  padding:1rem;
 }
 label{
- font-size:0.7rem;
+ font-size:.7rem;
  color:#9ca3af;
 }
-input[type=range]{touch-action:none}
-button:active{transform:scale(.95)}
 </style>
 </head>
 
@@ -38,7 +35,9 @@ button:active{transform:scale(.95)}
 
 <header class="text-center mb-3">
  <h1 class="text-xl font-bold">🎸 BassFX</h1>
- <p class="text-[10px] text-gray-400">Modo LINE • Baixa Latência</p>
+ <p class="text-[10px] text-gray-400">
+  Entrada: P2 • Saída: Bluetooth
+ </p>
 </header>
 
 <section class="section mb-3">
@@ -46,107 +45,112 @@ button:active{transform:scale(.95)}
 </section>
 
 <section class="grid grid-cols-2 gap-3 mb-3">
- <button id="powerBtn"
-  class="py-4 rounded-xl bg-green-700 font-bold text-white">
-  LIGAR
- </button>
-
- <button id="micBtn"
-  class="py-4 rounded-xl bg-yellow-500 font-bold text-black">
-  MIC ON
- </button>
+ <button id="powerBtn" class="py-4 rounded-xl bg-green-700 font-bold">LIGAR</button>
+ <button id="micBtn" class="py-4 rounded-xl bg-yellow-500 font-bold text-black">MIC ON</button>
 </section>
 
 <section class="section mb-3">
- <label>INPUT GAIN (LINE)</label>
+ <label>INPUT GAIN (P2)</label>
  <input id="gain" type="range" min="0" max="6" step="0.05" value="1">
 </section>
 
 <section class="section">
- <label>MASTER VOLUME</label>
+ <label>MASTER (BLUETOOTH)</label>
  <input id="volume" type="range" min="0" max="1.2" step="0.05" value="0.9">
 </section>
 
 <footer class="text-center mt-4 text-[9px] text-gray-500">
- BassFX • Line Ready • Mobile • PWA
+ BassFX • Line Ready • Mobile
 </footer>
 
 <script>
-/* =============== AUDIO ENGINE ================= */
-
 let ctx, mic, gainNode, master, analyser, stream;
 let running=false, micOn=true;
 
 const powerBtn=document.getElementById("powerBtn");
 const micBtn=document.getElementById("micBtn");
+const gain=document.getElementById("gain");
+const volume=document.getElementById("volume");
 const scope=document.getElementById("scope");
 const c=scope.getContext("2d");
 
-const gain=document.getElementById("gain");
-const volume=document.getElementById("volume");
+/* ===== Selecionar MIC P2 ===== */
+async function getP2Mic(){
+ const devices=await navigator.mediaDevices.enumerateDevices();
+ return devices.find(d=>
+  d.kind==="audioinput" &&
+  /wired|headset|microfone|p2/i.test(d.label)
+ );
+}
 
-/* -------- START / STOP -------- */
+/* ===== Selecionar Saída Bluetooth ===== */
+async function setBluetoothOutput(){
+ const devices=await navigator.mediaDevices.enumerateDevices();
+ const bt=devices.find(d=>
+  d.kind==="audiooutput" &&
+  /bluetooth|bt/i.test(d.label)
+ );
+ if(bt && typeof master.setSinkId==="function"){
+  await master.setSinkId(bt.deviceId);
+ }
+}
+
+/* ===== LIGAR / DESLIGAR ===== */
 powerBtn.onclick=async()=>{
- if(!running){
-  const AudioContext = window.AudioContext||window.webkitAudioContext;
-
-  ctx=new AudioContext({
-   latencyHint:"interactive",
-   sampleRate:48000
-  });
-
-  if(ctx.state==="suspended") await ctx.resume();
-
-  stream=await navigator.mediaDevices.getUserMedia({
-   audio:{
-    echoCancellation:true,
-    noiseSuppression:false,
-    autoGainControl:false,
-    latency:0,
-    channelCount:1
-   }
-  });
-
-  mic=ctx.createMediaStreamSource(stream);
-
-  gainNode=ctx.createGain();
-  gainNode.gain.value=+gain.value;
-
-  master=ctx.createGain();
-  master.gain.value=+volume.value;
-
-  analyser=ctx.createAnalyser();
-  analyser.fftSize=1024;
-  analyser.smoothingTimeConstant=0.85;
-
-  mic.connect(gainNode)
-     .connect(master)
-     .connect(analyser)
-     .connect(ctx.destination);
-
-  running=true;
-  powerBtn.textContent="DESLIGAR";
-  powerBtn.classList.replace("bg-green-700","bg-red-700");
-  draw();
-
- }else{
+ if(running){
   ctx.close();
   stream.getTracks().forEach(t=>t.stop());
   running=false;
   powerBtn.textContent="LIGAR";
   powerBtn.classList.replace("bg-red-700","bg-green-700");
+  return;
  }
+
+ const AudioContext=window.AudioContext||window.webkitAudioContext;
+ ctx=new AudioContext({latencyHint:"interactive",sampleRate:48000});
+ await ctx.resume();
+
+ const p2=await getP2Mic();
+
+ stream=await navigator.mediaDevices.getUserMedia({
+  audio:{
+   deviceId: p2?.deviceId ? {exact:p2.deviceId}:undefined,
+   echoCancellation:false,
+   noiseSuppression:false,
+   autoGainControl:false,
+   channelCount:1
+  }
+ });
+
+ mic=ctx.createMediaStreamSource(stream);
+
+ gainNode=ctx.createGain();
+ gainNode.gain.value=+gain.value;
+
+ master=ctx.createGain();
+ master.gain.value=+volume.value;
+
+ analyser=ctx.createAnalyser();
+ analyser.fftSize=1024;
+
+ mic.connect(gainNode).connect(master).connect(analyser).connect(ctx.destination);
+
+ await setBluetoothOutput();
+
+ running=true;
+ powerBtn.textContent="DESLIGAR";
+ powerBtn.classList.replace("bg-green-700","bg-red-700");
+ draw();
 };
 
-/* -------- MIC ON / OFF -------- */
+/* ===== MIC ON/OFF ===== */
 micBtn.onclick=()=>{
  micOn=!micOn;
- if(gainNode) gainNode.gain.value = micOn ? +gain.value : 0;
- micBtn.textContent = micOn ? "MIC ON" : "MIC OFF";
- micBtn.classList.toggle("bg-gray-600",!micOn);
+ if(gainNode) gainNode.gain.value=micOn?+gain.value:0;
+ micBtn.textContent=micOn?"MIC ON":"MIC OFF";
 };
 
-/* -------- CONTROLES -------- */
+/* ===== CONTROLES ===== */
 gain.oninput=e=>{
  if(gainNode && micOn) gainNode.gain.value=+e.target.value;
 };
@@ -154,7 +158,7 @@ volume.oninput=e=>{
  if(master) master.gain.value=+e.target.value;
 };
 
-/* -------- VISUAL -------- */
+/* ===== OSCILOSCÓPIO ===== */
 function draw(){
  if(!running) return;
  requestAnimationFrame(draw);
@@ -173,22 +177,10 @@ function draw(){
 
  for(let i=0;i<data.length;i+=3){
   const x=i*scope.width/data.length;
-  const y=(data[i]/255)*scope.height;
+  const y=data[i]/255*scope.height;
   i?c.lineTo(x,y):c.moveTo(x,y);
  }
  c.stroke();
-}
-
-/* -------- PWA (GitHub Pages OK) -------- */
-if('serviceWorker'in navigator){
- navigator.serviceWorker.register(
-  URL.createObjectURL(
-   new Blob(
-    [`self.addEventListener("fetch",e=>e.respondWith(fetch(e.request)))`],
-    {type:"application/javascript"}
-   )
-  )
- );
 }
 </script>
 
